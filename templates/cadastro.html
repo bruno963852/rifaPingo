@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rifa em Prol da Cirurgia do Pingo - Cadastro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎰 RIFA 100</h1>
+            <ul class="nav-links">
+                <li><a href="/">Início</a></li>
+                <li><a href="/cadastro">Cadastro</a></li>
+                <li><a href="/consultar">Consultar números</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="form-section">
+            <h1>Formulário de Cadastro</h1>
+            <form id="cadastroForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required placeholder="seu@email.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="senha">Senha:</label>
+                    <input type="password" id="senha" name="senha" required placeholder="Mínimo 6 caracteres" minlength="6">
+                    <small>Use esta senha para consultar seus números de sorte</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="quantidade_tickets">Quantidade de Tickets:</label>
+                    <input type="number" id="quantidade_tickets" name="quantidade_tickets" min="1" max="100" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="comprovante">Comprovante de Pagamento (PIX):</label>
+                    <input type="file" id="comprovante" name="comprovante" accept="image/*,.pdf" required>
+                    <small>Formatos aceitos: PDF, PNG, JPG, GIF, BMP (máx 16MB)</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="submitBtn">Enviar Cadastro</button>
+                <div id="mensagem" class="mensagem-container"></div>
+            </form>
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 Rifa 100 - Todos os direitos reservados</p>
+    </footer>
+
+    <script>
+        document.getElementById('cadastroForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(document.getElementById('cadastroForm'));
+            const submitBtn = document.getElementById('submitBtn');
+            const mensagemDiv = document.getElementById('mensagem');
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Enviando...';
+
+            try {
+                const response = await fetch('/cadastro', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                mensagemDiv.className = 'mensagem-container';
+                if (response.ok) {
+                    mensagemDiv.classList.add('sucesso');
+                    mensagemDiv.innerHTML = `<p class="sucesso-text">${data.mensagem}</p>`;
+                    document.getElementById('cadastroForm').reset();
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                } else {
+                    mensagemDiv.classList.add('erro');
+                    mensagemDiv.innerHTML = `<p class="erro-text">${data.mensagem}</p>`;
+                }
+            } catch (error) {
+                mensagemDiv.className = 'mensagem-container erro';
+                mensagemDiv.innerHTML = `<p class="erro-text">Erro ao enviar: ${error.message}</p>`;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Enviar Cadastro';
+            }
+        });
+    </script>
+</body>
+</html>

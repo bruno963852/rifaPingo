@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rifa em Prol da Cirurgia do Pingo - Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎰 RIFA 100</h1>
+            <ul class="nav-links">
+                <li><a href="/">Início</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="form-section" style="max-width: 400px; margin: 3rem auto;">
+            <h1>🔐 Painel Administrativo</h1>
+            <p style="text-align: center; color: #7f8c8d; margin-bottom: 2rem;">Digite sua senha para acessar</p>
+            
+            <form method="POST">
+                <div class="form-group">
+                    <label for="senha">Senha de Administrador:</label>
+                    <input type="password" id="senha" name="senha" required autofocus placeholder="Digite a senha">
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Entrar</button>
+                
+                {% if erro %}
+                    <div class="resultado erro-box" style="margin-top: 1.5rem;">
+                        <p class="erro-text">❌ {{ erro }}</p>
+                    </div>
+                {% endif %}
+            </form>
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 Rifa 100 - Todos os direitos reservados</p>
+    </footer>
+</body>
+</html>

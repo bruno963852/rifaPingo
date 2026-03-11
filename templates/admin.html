@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rifa em Prol da Cirurgia do Pingo - Administração</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎰 RIFA 100 - Administração</h1>
+            <ul class="nav-links">
+                <li><a href="/">Início</a></li>
+                <li><a href="/admin/logout" style="color: #e74c3c;">Sair</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="admin-section">
+            <h1>Painel de Administração</h1>
+
+            <div class="admin-tabs">
+                <button class="tab-btn active" data-status="pendente">Pendentes</button>
+                <button class="tab-btn" data-status="aprovado">Aprovados</button>
+                <button class="tab-btn" data-status="rejeitado">Rejeitados</button>
+            </div>
+
+            <div class="admin-table">
+                <table id="participantesTable">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Tickets</th>
+                            <th>Data</th>
+                            <th>Comprovante</th>
+                            <th>Números</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td colspan="6" style="text-align: center;">Carregando...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal de Rejeição -->
+    <div id="rejeicaoModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Rejeitar Participante</h2>
+            <input type="hidden" id="participanteIdRejeitar">
+            <div class="form-group">
+                <label for="motivo">Motivo da Rejeição:</label>
+                <textarea id="motivo" placeholder="Digite o motivo..." required></textarea>
+            </div>
+            <button class="btn btn-danger" onclick="confirmarRejeicao()">Confirmar Rejeição</button>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 Rifa 100 - Todos os direitos reservados</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>

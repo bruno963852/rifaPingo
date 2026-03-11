@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rifa em Prol da Cirurgia do Pingo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎰 Rifa em Prol da Cirurgia do Pingo</h1>
+            <ul class="nav-links">
+                <li><a href="/">Início</a></li>
+                <li><a href="/cadastro">Cadastro</a></li>
+                <li><a href="/consultar">Consultar números</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="hero">
+            <h1>Bem-vindo à Rifa em Prol da Cirurgia do Pingo!</h1>
+            <p>Participe do nosso sorteio! Preencha o formulário, faça o pagamento e acompanhe seus números da sorte.</p>
+        </section>
+
+        <div class="preco-banner">
+            <h2 style="margin: 0; color: white; font-size: 1.8rem;">💰 Cada Número custa <strong>R$ 10,00</strong></h2>
+            <p style="margin: 0.5rem 0 0 0; color: rgba(255,255,255,0.9);">Compre quantos quiser e multiplique suas chances!</p>
+        </div>
+
+        <div class="cta-buttons">
+            <a href="/cadastro" class="btn btn-primary">Participar Agora</a>
+            <a href="/consultar" class="btn btn-secondary">Consultar Números</a>
+        </div>
+
+        <section class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="confirmados">0</div>
+                <div class="stat-label">Cadastros Confirmados</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="em-espera">0</div>
+                <div class="stat-label">Em Espera</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="total">0</div>
+                <div class="stat-label">Total de Cadastros</div>
+            </div>
+            <div class="stat-card" id="status-bloqueio">
+                <div class="stat-message" id="bloqueio-msg">✅ Sorteio Aberto</div>
+                <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">Data do sorteio: <strong>31 de Março de 2026</strong> ou quando atingirmos <strong>200</strong> participantes</p>
+            </div>
+        </section>
+
+        <section class="info-section">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                <div style="display: flex; flex-direction: column; gap: 2rem;">
+                    <div class="info-box">
+                        <h2>Como funciona?</h2>
+                        <ol>
+                            <li>Faça o pagamento via PIX de quantos números você deseja</li>
+                            <li>Preencha o formulário com seus dados</li>
+                            <li>Envie o comprovante de pagamento</li>
+                            <li>Aguarde a confirmação manual do pagamento</li>
+                            <li>Receba seus números da sorte por email</li>
+                            <li>Acompanhe seu cadastro na página de <a href="/consultar" style="color: var(--primary-color); text-decoration: none; font-weight: bold;">consulta</a></li>
+                        </ol>
+                    </div>
+
+                    <div class="info-box pix-card">
+                        <h2 style="text-align: center;">💳 Faça aqui seu pagamento via PIX!</h2>
+                        <div style="text-align: center; margin: 1.5rem 0;">
+                            <img src="{{ url_for('static', filename='images/qrcode.png') }}" alt="QR Code PIX" class="pix-qrcode">
+                        </div>
+                        <div style="background-color: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1rem 0; text-align: center;">
+                            <p style="margin: 0.5rem 0; font-size: 0.95rem; color: #555;">
+                                <strong>Beneficiário:</strong><br>
+                                Maria Giovanna de Oliveira Barros
+                            </p>
+                            <p style="margin: 0.5rem 0; font-size: 0.95rem; color: #555;">
+                                <strong>Banco:</strong> Nubank
+                            </p>
+                        </div>
+                        <p style="text-align: center; font-size: 0.9rem; color: #888; margin-top: 1rem;">
+                            Escaneie o código QR com seu smartphone ou copie a chave PIX
+                        </p>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <div style="text-align: center; margin-bottom: 1.5rem;">
+                        <img src="{{ url_for('static', filename='images/pingo.jpeg') }}" alt="Pingo - Nosso gato" class="pingo-foto">
+                    </div>
+                    <h2>🐱 Motivação da Rifa</h2>
+                    <p>Esta rifa é em prol da cirurgia do <strong>Pingo</strong>, nosso gato de 5 anos.</p>
+                    <p>Há alguns meses, o Pingo vinha sentindo um desconforto no ouvido direito. Após investigação e consulta com um especialista, foi detectada <strong>uma massa dentro do ouvido</strong>, que secreta pus e gera bastante desconforto ao animal.</p>
+                    <p>Desde que nasceu, o Pingo carrega uma sequela respiratória que nunca havia sido explicada. Contudo, o especialista suspeita que <strong>essa massa no ouvido possa explicar esses problemas respiratórios</strong>, que jamais foram detectados antes, pois apenas o especialista possui o equipamento adequado para examinar bem o interior do ouvido do animal.</p>
+                    
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem; color: #2c3e50;">🏥 Procedimentos Necessários:</h3>
+                    <ul style="margin-left: 1.25rem; color: #555;">
+                        <li><strong>Tomografia de crânio</strong></li>
+                        <li><strong>Vídeo otoendoscopia</strong></li>
+                        <li><strong>Retirada de neoformação</strong></li>
+                        <li><strong>Lavagem das duas orelhas</strong></li>
+                    </ul>
+                    
+                    <a href="{{ url_for('static', filename='docs/Receita_Pingo.pdf') }}" target="_blank" style="display: inline-block; margin-top: 1rem; padding: 0.75rem 1.25rem; background-color: var(--primary-color); color: white; text-decoration: none; border-radius: 5px; font-weight: bold; transition: background-color 0.3s;">📄 Ver Laudo do Veterinário</a>
+                    
+                    <p style="margin-top: 1.5rem;"><strong>Sua contribuição pode fazer a diferença!</strong> 💚</p>
+
+                    <div style="margin-top: 1.5rem;">
+                        <h3 style="margin-bottom: 0.75rem; color: #2c3e50;">Exame Veterinário</h3>
+                        <video controls style="width: 100%; border-radius: 8px; background-color: #000;">
+                            <source src="{{ url_for('static', filename='video/VideoPingo.mp4') }}" type="video/mp4">
+                            Seu navegador não suporta vídeo HTML5.
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cta-buttons">
+                <a href="/cadastro" class="btn btn-primary">Participar Agora</a>
+                <a href="/consultar" class="btn btn-secondary">Consultar Números</a>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 Pingo - Todos os direitos reservados</p>
+    </footer>
+
+    <script>
+        function atualizarStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('confirmados').textContent = data.confirmados;
+                    document.getElementById('em-espera').textContent = data.em_espera;
+                    document.getElementById('total').textContent = data.total;
+                    const bloqueioMsg = document.getElementById('bloqueio-msg');
+                    if (data.bloqueado) {
+                        bloqueioMsg.textContent = '❌ Sorteio Cheio';
+                        bloqueioMsg.style.color = '#e74c3c';
+                    } else {
+                        bloqueioMsg.textContent = '✅ Sorteio Aberto';
+                        bloqueioMsg.style.color = '#2ecc71';
+                    }
+                });
+        }
+
+        atualizarStats();
+        setInterval(atualizarStats, 3000);
+    </script>
+</body>
+</html>

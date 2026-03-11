@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rifa em Prol da Cirurgia do Pingo - Consultar</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎰 RIFA 100</h1>
+            <ul class="nav-links">
+                <li><a href="/">Início</a></li>
+                <li><a href="/cadastro">Cadastro</a></li>
+                <li><a href="/consultar">Consultar números</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <section class="form-section">
+            <h1>Consultar Números da Sorte</h1>
+            <form method="POST" class="consulta-form">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" placeholder="seu@email.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="senha">Senha:</label>
+                    <input type="password" id="senha" name="senha" placeholder="Sua senha" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Consultar</button>
+            </form>
+
+            {% if resultado %}
+                {% if resultado.get('erro') %}
+                    <div class="resultado erro-box">
+                        <p class="erro-text">❌ {{ resultado['erro'] }}</p>
+                    </div>
+                {% elif resultado.get('status') == 'pendente' %}
+                    <div class="resultado alerta-box">
+                        <p class="alerta-text">⏳ {{ resultado['mensagem'] }}</p>
+                    </div>
+                {% elif resultado.get('status') == 'rejeitado' %}
+                    <div class="resultado erro-box">
+                        <p class="erro-text">❌ {{ resultado['mensagem'] }}</p>
+                        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #f5c6cb;">
+                            <p style="margin-bottom: 1rem;">Deseja refazer seu cadastro?</p>
+                            <a href="/cadastro" class="btn btn-primary">Fazer novo cadastro</a>
+                        </div>
+                    </div>
+                {% elif resultado.get('status') == 'aprovado' %}
+                    <div class="resultado sucesso-box">
+                        <h2>✅ Cadastro Aprovado!</h2>
+                        <p><strong>Email:</strong> {{ resultado['email'] }}</p>
+                        <p><strong>Quantidade de Tickets:</strong> {{ resultado['quantidade_tickets'] }}</p>
+                        <p><strong>Data de Aprovação:</strong> {{ resultado['data_aprovacao'] }}</p>
+                        <div class="numeros-sorte">
+                            <h3>Seus Números da Sorte:</h3>
+                            <div class="numeros-grid">
+                                {% for numero in resultado['numeros_sorte'] %}
+                                    <div class="numero-badge">{{ numero }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endif %}
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 Rifa 100 - Todos os direitos reservados</p>
+    </footer>
+</body>
+</html>

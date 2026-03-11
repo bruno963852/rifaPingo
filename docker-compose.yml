@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    container_name: rifa-web
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./instance:/app/instance
+      - ./static/uploads:/app/static/uploads
+    restart: unless-stopped
