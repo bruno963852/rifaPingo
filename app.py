@@ -57,6 +57,7 @@ def login_required(f):
 # Modelo de Banco de Dados
 class Participante(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120))
     email = db.Column(db.String(120), nullable=False)
     senha = db.Column(db.String(255), nullable=False)
     quantidade_tickets = db.Column(db.Integer, nullable=False)
@@ -78,6 +79,7 @@ def garantir_colunas_participante():
     inspector = inspect(db.engine)
     colunas_existentes = {coluna['name'] for coluna in inspector.get_columns('participante')}
     colunas_necessarias = {
+        'nome': 'VARCHAR(120)',
         'quantidade_tickets_pendente': 'INTEGER',
         'comprovante_pendente': 'VARCHAR(255)',
         'data_solicitacao_extra': 'DATETIME',
@@ -170,6 +172,7 @@ def montar_resultado_consulta(participante, senha='', mensagem=None, mensagem_ti
     numeros = [str(numero) for numero in obter_numeros_lista(participante)]
     resultado = {
         'status': participante.status,
+        'nome': participante.nome or '',
         'email': participante.email,
         'senha': senha,
         'quantidade_tickets': participante.quantidade_tickets,
@@ -229,11 +232,15 @@ def get_stats():
 @app.route('/cadastro', methods=['GET', 'POST'])
 def cadastro():
     if request.method == 'POST':
+        nome = request.form.get('nome', '').strip()
         email = request.form.get('email', '').lower().strip()
         senha = request.form.get('senha', '').strip()
         quantidade_str = request.form.get('quantidade_tickets', '0')
         
         # Validações
+        if not nome:
+            return jsonify({'sucesso': False, 'mensagem': 'Nome é obrigatório'}), 400
+
         if not email or not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
             return jsonify({'sucesso': False, 'mensagem': 'Email inválido'}), 400
         
@@ -276,6 +283,7 @@ def cadastro():
         
         # Criar participante
         participante = Participante(
+            nome=nome,
             email=email,
             senha=senha,
             quantidade_tickets=quantidade,
@@ -419,6 +427,7 @@ def get_participantes():
         for participante in Participante.query.filter_by(status='pendente').all():
             participantes.append({
                 'id': participante.id,
+                'nome': participante.nome,
                 'email': participante.email,
                 'quantidade_tickets': participante.quantidade_tickets,
                 'comprovante': participante.comprovante,
@@ -432,6 +441,7 @@ def get_participantes():
             if possui_solicitacao_extra_pendente(participante):
                 participantes.append({
                     'id': participante.id,
+                    'nome': participante.nome,
                     'email': participante.email,
                     'quantidade_tickets': participante.quantidade_tickets_pendente,
                     'comprovante': participante.comprovante_pendente,
@@ -446,6 +456,7 @@ def get_participantes():
         for participante in Participante.query.filter_by(status=status_filter).all():
             participantes.append({
                 'id': participante.id,
+                'nome': participante.nome,
                 'email': participante.email,
                 'quantidade_tickets': participante.quantidade_tickets,
                 'comprovante': participante.comprovante,

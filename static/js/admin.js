@@ -37,12 +37,13 @@ function carregarParticipantes() {
             const tableBody = document.getElementById('tableBody');
             
             if (data.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Nenhum participante encontrado</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Nenhum participante encontrado</td></tr>';
                 return;
             }
 
             tableBody.innerHTML = data.map(p => `
                 <tr>
+                    <td>${p.nome || '-'}</td>
                     <td>${p.email}</td>
                     <td>${p.tipo_label || '-'}</td>
                     <td>${p.quantidade_tickets}</td>
@@ -70,7 +71,7 @@ function carregarParticipantes() {
         })
         .catch(error => {
             console.error('Erro ao carregar participantes:', error);
-            document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" style="text-align: center; color: red;">Erro ao carregar dados</td></tr>';
+            document.getElementById('tableBody').innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Erro ao carregar dados</td></tr>';
         });
 }
 
