@@ -101,6 +101,13 @@
                         </div>
                         <div style="background-color: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1rem 0; text-align: center;">
                             <p style="margin: 0.5rem 0; font-size: 0.95rem; color: #555;">
+                                <strong>Chave PIX:</strong><br>
+                                <span id="pix-chave">604.327.843-06</span>
+                            </p>
+                            <button type="button" class="btn btn-secondary" onclick="copiarChavePix()" style="margin: 0.5rem 0 0.75rem 0;">
+                                Copiar chave PIX
+                            </button>
+                            <p style="margin: 0.5rem 0; font-size: 0.95rem; color: #555;">
                                 <strong>Beneficiário:</strong><br>
                                 Maria Giovanna de Oliveira Barros
                             </p>
@@ -157,6 +164,15 @@
     </footer>
 
     <script>
+        function copiarChavePix() {
+            const chavePix = document.getElementById('pix-chave').textContent.trim();
+            navigator.clipboard.writeText(chavePix).then(() => {
+                alert('Chave PIX copiada.');
+            }).catch(() => {
+                alert('Nao foi possivel copiar a chave PIX.');
+            });
+        }
+
         function atualizarStats() {
             fetch('/api/stats')
                 .then(response => response.json())
