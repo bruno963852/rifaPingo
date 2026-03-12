@@ -38,6 +38,7 @@ PINGO_IMAGE_PATH = os.path.join(app.root_path, 'static', 'images', 'pingo.jpg')
 
 # Configuração de admin
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'senha123')
+TOTAL_NUMEROS_RIFA = 200
 
 # Extensões de arquivo permitidas
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp'}
@@ -160,13 +161,16 @@ def total_numeros_pendentes():
     return cadastros_iniciais + compras_adicionais
 
 def numeros_disponiveis():
-    return 100 - total_numeros_confirmados() - total_numeros_pendentes()
+    return TOTAL_NUMEROS_RIFA - total_numeros_confirmados() - total_numeros_pendentes()
 
 def salvar_comprovante(email, arquivo, prefixo='cadastro'):
     filename = secure_filename(f"{prefixo}_{email}_{datetime.now().timestamp()}_{arquivo.filename}")
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     arquivo.save(filepath)
     return filename
+
+def numeros_disponiveis_para_edicao(quantidade_atual):
+    return numeros_disponiveis() + (quantidade_atual or 0)
 
 def montar_resultado_consulta(participante, senha='', mensagem=None, mensagem_tipo='sucesso'):
     numeros = [str(numero) for numero in obter_numeros_lista(participante)]
@@ -201,7 +205,7 @@ def gerar_numeros_sorte(quantidade):
             numeros_usados.update(int(n.strip()) for n in numeros)
     
     # Encontrar números disponíveis
-    numeros_disponiveis = [n for n in range(1, 101) if n not in numeros_usados]
+    numeros_disponiveis = [n for n in range(1, TOTAL_NUMEROS_RIFA + 1) if n not in numeros_usados]
     
     # Se não houver números suficientes, retornar vazio
     if len(numeros_disponiveis) < quantidade:
@@ -220,7 +224,7 @@ def get_stats():
     confirmados = total_numeros_confirmados()
     em_espera = total_numeros_pendentes()
     total_bloqueado = confirmados + em_espera
-    bloqueado = True if total_bloqueado >= 100 else False
+    bloqueado = True if total_bloqueado >= TOTAL_NUMEROS_RIFA else False
     
     return jsonify({
         'confirmados': confirmados,
@@ -249,8 +253,8 @@ def cadastro():
         
         try:
             quantidade = int(quantidade_str)
-            if quantidade < 1 or quantidade > 100:
-                return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser entre 1 e 100'}), 400
+            if quantidade < 1 or quantidade > TOTAL_NUMEROS_RIFA:
+                return jsonify({'sucesso': False, 'mensagem': f'Quantidade deve ser entre 1 e {TOTAL_NUMEROS_RIFA}'}), 400
         except ValueError:
             return jsonify({'sucesso': False, 'mensagem': 'Quantidade inválida'}), 400
 
@@ -330,13 +334,13 @@ def consultar():
                 quantidade_extra_str = request.form.get('quantidade_tickets_extra', '0')
                 try:
                     quantidade_extra = int(quantidade_extra_str)
-                    if quantidade_extra < 1 or quantidade_extra > 100:
+                    if quantidade_extra < 1 or quantidade_extra > TOTAL_NUMEROS_RIFA:
                         raise ValueError
                 except ValueError:
                     resultado = montar_resultado_consulta(
                         participante,
                         senha=senha,
-                        mensagem='A quantidade adicional deve ser entre 1 e 100.',
+                        mensagem=f'A quantidade adicional deve ser entre 1 e {TOTAL_NUMEROS_RIFA}.',
                         mensagem_tipo='erro'
                     )
                     return render_template('consultar.html', resultado=resultado)
@@ -434,7 +438,8 @@ def get_participantes():
                 'data_criacao': participante.data_criacao.strftime('%d/%m/%Y %H:%M'),
                 'numeros_sorte': participante.numeros_sorte,
                 'tipo_solicitacao': 'cadastro_inicial',
-                'tipo_label': 'Cadastro inicial'
+                'tipo_label': 'Cadastro inicial',
+                'pode_editar_quantidade': True
             })
 
         for participante in Participante.query.filter_by(status='aprovado').all():
@@ -448,7 +453,8 @@ def get_participantes():
                     'data_criacao': participante.data_solicitacao_extra.strftime('%d/%m/%Y %H:%M') if participante.data_solicitacao_extra else '',
                     'numeros_sorte': participante.numeros_sorte,
                     'tipo_solicitacao': 'compra_adicional',
-                    'tipo_label': 'Compra adicional'
+                    'tipo_label': 'Compra adicional',
+                    'pode_editar_quantidade': True
                 })
 
         participantes.sort(key=lambda item: item['data_criacao'], reverse=True)
@@ -463,10 +469,52 @@ def get_participantes():
                 'data_criacao': participante.data_criacao.strftime('%d/%m/%Y %H:%M'),
                 'numeros_sorte': participante.numeros_sorte,
                 'tipo_solicitacao': 'cadastro_inicial',
-                'tipo_label': 'Cadastro inicial'
+                'tipo_label': 'Cadastro inicial',
+                'pode_editar_quantidade': status_filter == 'pendente'
             })
     
     return jsonify(participantes)
+
+@app.route('/api/admin/participantes/<int:participante_id>', methods=['PATCH'])
+@login_required
+def atualizar_participante_admin(participante_id):
+    participante = Participante.query.get_or_404(participante_id)
+    data = request.get_json() or {}
+    tipo_solicitacao = data.get('tipo_solicitacao', 'cadastro_inicial')
+
+    nome = data.get('nome')
+    if nome is not None:
+        nome = nome.strip()
+        if not nome:
+            return jsonify({'sucesso': False, 'mensagem': 'Nome é obrigatório'}), 400
+        participante.nome = nome
+
+    quantidade_informada = data.get('quantidade_tickets')
+    if quantidade_informada is not None:
+        try:
+            quantidade = int(quantidade_informada)
+        except (TypeError, ValueError):
+            return jsonify({'sucesso': False, 'mensagem': 'Quantidade inválida'}), 400
+
+        if quantidade < 1 or quantidade > TOTAL_NUMEROS_RIFA:
+            return jsonify({'sucesso': False, 'mensagem': f'Quantidade deve ser entre 1 e {TOTAL_NUMEROS_RIFA}'}), 400
+
+        if tipo_solicitacao == 'cadastro_inicial' and participante.status == 'pendente':
+            if quantidade > numeros_disponiveis_para_edicao(participante.quantidade_tickets):
+                return jsonify({'sucesso': False, 'mensagem': 'Não há números disponíveis suficientes para essa quantidade.'}), 400
+            participante.quantidade_tickets = quantidade
+        elif tipo_solicitacao == 'compra_adicional' and possui_solicitacao_extra_pendente(participante):
+            if quantidade > numeros_disponiveis_para_edicao(participante.quantidade_tickets_pendente):
+                return jsonify({'sucesso': False, 'mensagem': 'Não há números disponíveis suficientes para essa quantidade.'}), 400
+            participante.quantidade_tickets_pendente = quantidade
+        else:
+            return jsonify({'sucesso': False, 'mensagem': 'A quantidade só pode ser alterada em solicitações pendentes.'}), 400
+
+    if nome is None and quantidade_informada is None:
+        return jsonify({'sucesso': False, 'mensagem': 'Nenhuma alteração foi informada'}), 400
+
+    db.session.commit()
+    return jsonify({'sucesso': True, 'mensagem': 'Dados atualizados com sucesso.'})
 
 @app.route('/api/admin/aprovar/<int:participante_id>', methods=['POST'])
 @login_required

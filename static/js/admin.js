@@ -13,17 +13,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Modal close
-    const modal = document.getElementById('rejeicaoModal');
-    const closeBtn = document.querySelector('.close');
-    closeBtn.addEventListener('click', () => {
-        modal.classList.remove('show');
+    document.querySelectorAll('[data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            fecharModal(btn.dataset.closeModal);
+        });
     });
 
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.classList.remove('show');
-        }
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
     });
 
     // Atualizar lista a cada 3 segundos
@@ -56,6 +57,17 @@ function carregarParticipantes() {
                     <td>${p.numeros_sorte || '-'}</td>
                     <td>
                         <div class="table-actions">
+                            <button
+                                class="btn-edit"
+                                data-id="${p.id}"
+                                data-nome="${encodeURIComponent(p.nome || '')}"
+                                data-quantidade="${p.quantidade_tickets}"
+                                data-tipo="${p.tipo_solicitacao || 'cadastro_inicial'}"
+                                data-pode-editar-quantidade="${p.pode_editar_quantidade ? 'true' : 'false'}"
+                                onclick="abrirModalEdicaoFromButton(this)"
+                            >
+                                Editar
+                            </button>
                             ${statusAtual === 'pendente' ? `
                                 <button class="btn-approve" onclick="aprovarParticipante(${p.id})">
                                     Aprovar
@@ -73,6 +85,10 @@ function carregarParticipantes() {
             console.error('Erro ao carregar participantes:', error);
             document.getElementById('tableBody').innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Erro ao carregar dados</td></tr>';
         });
+}
+
+function fecharModal(modalId) {
+    document.getElementById(modalId).classList.remove('show');
 }
 
 function aprovarParticipante(id) {
@@ -105,6 +121,85 @@ function abrirModalRejeicao(id) {
     document.getElementById('participanteIdRejeitar').value = id;
     document.getElementById('motivo').value = '';
     document.getElementById('rejeicaoModal').classList.add('show');
+}
+
+function abrirModalEdicaoFromButton(button) {
+    abrirModalEdicao(
+        button.dataset.id,
+        decodeURIComponent(button.dataset.nome || ''),
+        Number(button.dataset.quantidade || 0),
+        button.dataset.tipo || 'cadastro_inicial',
+        button.dataset.podeEditarQuantidade === 'true'
+    );
+}
+
+function abrirModalEdicao(id, nome, quantidade, tipoSolicitacao, podeEditarQuantidade) {
+    document.getElementById('participanteIdEditar').value = id;
+    document.getElementById('tipoSolicitacaoEditar').value = tipoSolicitacao;
+    document.getElementById('podeEditarQuantidade').value = podeEditarQuantidade ? 'true' : 'false';
+    document.getElementById('nomeEditar').value = nome || '';
+
+    const grupoQuantidade = document.getElementById('grupoQuantidadeEditar');
+    const quantidadeInput = document.getElementById('quantidadeEditar');
+    const quantidadeHint = document.getElementById('quantidadeHint');
+
+    if (podeEditarQuantidade) {
+        grupoQuantidade.style.display = 'block';
+        quantidadeInput.value = quantidade;
+        quantidadeInput.required = true;
+        quantidadeHint.textContent = tipoSolicitacao === 'compra_adicional'
+            ? 'Ajuste a quantidade desta compra adicional antes de aprovar.'
+            : 'Ajuste a quantidade do cadastro antes de aprovar.';
+    } else {
+        grupoQuantidade.style.display = 'none';
+        quantidadeInput.value = '';
+        quantidadeInput.required = false;
+    }
+
+    document.getElementById('edicaoModal').classList.add('show');
+}
+
+function salvarEdicao() {
+    const id = document.getElementById('participanteIdEditar').value;
+    const nome = document.getElementById('nomeEditar').value.trim();
+    const tipoSolicitacao = document.getElementById('tipoSolicitacaoEditar').value;
+    const podeEditarQuantidade = document.getElementById('podeEditarQuantidade').value === 'true';
+    const payload = { nome, tipo_solicitacao: tipoSolicitacao };
+
+    if (!nome) {
+        alert('Por favor, informe o nome do participante.');
+        return;
+    }
+
+    if (podeEditarQuantidade) {
+        const quantidade = Number(document.getElementById('quantidadeEditar').value);
+        if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 200) {
+            alert('A quantidade deve ser um número entre 1 e 200.');
+            return;
+        }
+        payload.quantidade_tickets = quantidade;
+    }
+
+    fetch(`/api/admin/participantes/${id}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            fecharModal('edicaoModal');
+            carregarParticipantes();
+        } else {
+            alert('Erro: ' + data.mensagem);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao salvar alterações: ' + error.message);
+    });
 }
 
 function confirmarRejeicao() {

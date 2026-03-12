@@ -631,6 +631,20 @@ table tr:hover {
     background-color: #2980b9;
 }
 
+.btn-edit {
+    background-color: var(--warning-color);
+    color: var(--white);
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.btn-edit:hover {
+    background-color: #d68910;
+}
+
 .btn-approve {
     background-color: var(--success-color);
     color: var(--white);
@@ -708,6 +722,20 @@ table tr:hover {
     resize: vertical;
 }
 
+.modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+}
+
+.form-hint {
+    display: block;
+    margin-top: 0.25rem;
+    color: #7f8c8d;
+    font-size: 0.85rem;
+}
+
 /* Footer */
 footer {
     background-color: var(--secondary-color);
@@ -780,6 +808,10 @@ footer {
     }
 
     .table-actions {
+        flex-direction: column;
+    }
+
+    .modal-actions {
         flex-direction: column;
     }
 
