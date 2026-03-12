@@ -7,6 +7,8 @@ import os
 from datetime import datetime
 import smtplib
 import random
+import json
+import uuid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -46,6 +48,21 @@ ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def carregar_lista_json(valor):
+    if not valor:
+        return []
+    try:
+        itens = json.loads(valor)
+        return itens if isinstance(itens, list) else []
+    except (TypeError, ValueError):
+        return []
+
+def salvar_lista_json(itens):
+    return json.dumps(itens, ensure_ascii=True)
+
+def novo_lote(prefixo):
+    return f'{prefixo}_{uuid.uuid4().hex}'
+
 # Decorator para proteger rotas admin
 def login_required(f):
     @wraps(f)
@@ -63,6 +80,7 @@ class Participante(db.Model):
     senha = db.Column(db.String(255), nullable=False)
     quantidade_tickets = db.Column(db.Integer, nullable=False)
     comprovante = db.Column(db.String(255), nullable=False)
+    comprovantes = db.Column(db.Text)
     status = db.Column(db.String(20), default='pendente')  # pendente, aprovado, rejeitado
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
     data_aprovacao = db.Column(db.DateTime)
@@ -70,8 +88,12 @@ class Participante(db.Model):
     motivo_rejeicao = db.Column(db.String(255))
     quantidade_tickets_pendente = db.Column(db.Integer)
     comprovante_pendente = db.Column(db.String(255))
+    comprovantes_pendente = db.Column(db.Text)
     data_solicitacao_extra = db.Column(db.DateTime)
     motivo_rejeicao_pendente = db.Column(db.String(255))
+    lote_cadastro = db.Column(db.String(64))
+    lote_pendente = db.Column(db.String(64))
+    historico_comprovantes = db.Column(db.Text)
     
     def __repr__(self):
         return f'<Participante {self.email}>'
@@ -81,10 +103,15 @@ def garantir_colunas_participante():
     colunas_existentes = {coluna['name'] for coluna in inspector.get_columns('participante')}
     colunas_necessarias = {
         'nome': 'VARCHAR(120)',
+        'comprovantes': 'TEXT',
         'quantidade_tickets_pendente': 'INTEGER',
         'comprovante_pendente': 'VARCHAR(255)',
+        'comprovantes_pendente': 'TEXT',
         'data_solicitacao_extra': 'DATETIME',
-        'motivo_rejeicao_pendente': 'VARCHAR(255)'
+        'motivo_rejeicao_pendente': 'VARCHAR(255)',
+        'lote_cadastro': 'VARCHAR(64)',
+        'lote_pendente': 'VARCHAR(64)',
+        'historico_comprovantes': 'TEXT'
     }
 
     with db.engine.begin() as conexao:
@@ -140,7 +167,11 @@ def formatar_numeros(numeros):
     return ','.join(map(str, sorted(numeros)))
 
 def possui_solicitacao_extra_pendente(participante):
-    return bool(participante.quantidade_tickets_pendente and participante.comprovante_pendente)
+    return bool(
+        participante.quantidade_tickets_pendente and (
+            participante.comprovante_pendente or participante.comprovantes_pendente
+        )
+    )
 
 def total_numeros_confirmados():
     return sum(
@@ -168,6 +199,124 @@ def salvar_comprovante(email, arquivo, prefixo='cadastro'):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     arquivo.save(filepath)
     return filename
+
+def salvar_comprovantes(email, arquivos, prefixo='cadastro'):
+    return [salvar_comprovante(email, arquivo, prefixo=prefixo) for arquivo in arquivos]
+
+def obter_arquivos_upload(campo):
+    return [arquivo for arquivo in request.files.getlist(campo) if arquivo and arquivo.filename]
+
+def obter_comprovantes_campo(participante, campo_lista, campo_legado):
+    comprovantes = []
+
+    for item in carregar_lista_json(getattr(participante, campo_lista) or ''):
+        if isinstance(item, str):
+            comprovantes.append(item)
+        elif isinstance(item, dict) and item.get('arquivo'):
+            comprovantes.append(item['arquivo'])
+
+    if not comprovantes and getattr(participante, campo_legado, None):
+        comprovantes.append(getattr(participante, campo_legado))
+
+    return comprovantes
+
+def obter_historico_comprovantes(participante):
+    historico = []
+    vistos = set()
+    for item in carregar_lista_json(participante.historico_comprovantes or ''):
+        if isinstance(item, dict) and item.get('arquivo'):
+            chave = (
+                item.get('arquivo'),
+                item.get('tipo', ''),
+                item.get('status', ''),
+                item.get('lote_id', '')
+            )
+            if chave not in vistos:
+                historico.append(item)
+                vistos.add(chave)
+
+    if historico:
+        return historico
+
+    fallback = []
+    for arquivo in obter_comprovantes_campo(participante, 'comprovantes', 'comprovante'):
+        fallback.append({
+            'arquivo': arquivo,
+            'tipo': 'cadastro_inicial',
+            'status': participante.status,
+            'lote_id': participante.lote_cadastro or 'legado_cadastro',
+            'data_envio': participante.data_criacao.isoformat() if participante.data_criacao else ''
+        })
+
+    for arquivo in obter_comprovantes_campo(participante, 'comprovantes_pendente', 'comprovante_pendente'):
+        fallback.append({
+            'arquivo': arquivo,
+            'tipo': 'compra_adicional',
+            'status': 'pendente',
+            'lote_id': participante.lote_pendente or 'legado_pendente',
+            'data_envio': participante.data_solicitacao_extra.isoformat() if participante.data_solicitacao_extra else ''
+        })
+
+    return fallback
+
+def adicionar_comprovantes_historico(participante, arquivos, tipo, status, lote_id):
+    historico = obter_historico_comprovantes(participante)
+    data_envio = datetime.utcnow().isoformat()
+    existentes = {
+        (
+            item.get('arquivo'),
+            item.get('tipo', ''),
+            item.get('status', ''),
+            item.get('lote_id', '')
+        )
+        for item in historico
+    }
+    for arquivo in arquivos:
+        chave = (arquivo, tipo, status, lote_id)
+        if chave in existentes:
+            continue
+        historico.append({
+            'arquivo': arquivo,
+            'tipo': tipo,
+            'status': status,
+            'lote_id': lote_id,
+            'data_envio': data_envio
+        })
+        existentes.add(chave)
+    participante.historico_comprovantes = salvar_lista_json(historico)
+
+def atualizar_status_lote_historico(participante, lote_id, novo_status):
+    if not lote_id:
+        return
+
+    historico = obter_historico_comprovantes(participante)
+    alterado = False
+    for item in historico:
+        if item.get('lote_id') == lote_id:
+            item['status'] = novo_status
+            alterado = True
+
+    if alterado:
+        participante.historico_comprovantes = salvar_lista_json(historico)
+
+def serializar_comprovantes_admin(participante, comprovantes):
+    itens = []
+    for item in comprovantes:
+        if isinstance(item, str):
+            item = {'arquivo': item}
+
+        arquivo = item.get('arquivo')
+        if not arquivo:
+            continue
+
+        itens.append({
+            'arquivo': arquivo,
+            'tipo': item.get('tipo', ''),
+            'status': item.get('status', ''),
+            'url': url_for('visualizar_comprovante_arquivo', participante_id=participante.id, filename=arquivo)
+        })
+
+    return itens
 
 def numeros_disponiveis_para_edicao(quantidade_atual):
     return numeros_disponiveis() + (quantidade_atual or 0)
@@ -271,19 +420,16 @@ def cadastro():
             db.session.delete(participante_existente)
             db.session.commit()
         
-        # Verificar arquivo
-        if 'comprovante' not in request.files:
+        arquivos = obter_arquivos_upload('comprovante')
+        if not arquivos:
             return jsonify({'sucesso': False, 'mensagem': 'Nenhum arquivo foi enviado'}), 400
-        
-        file = request.files['comprovante']
-        if file.filename == '':
-            return jsonify({'sucesso': False, 'mensagem': 'Nenhum arquivo foi selecionado'}), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({'sucesso': False, 'mensagem': 'Tipo de arquivo não permitido. Use: PDF, PNG, JPG, GIF, BMP'}), 400
-        
-        # Salvar arquivo
-        filename = salvar_comprovante(email, file)
+
+        for arquivo in arquivos:
+            if not allowed_file(arquivo.filename):
+                return jsonify({'sucesso': False, 'mensagem': 'Tipo de arquivo não permitido. Use: PDF, PNG, JPG, GIF, BMP'}), 400
+
+        lote_cadastro = novo_lote('cadastro')
+        filenames = salvar_comprovantes(email, arquivos)
         
         # Criar participante
         participante = Participante(
@@ -291,9 +437,12 @@ def cadastro():
             email=email,
             senha=senha,
             quantidade_tickets=quantidade,
-            comprovante=filename,
+            comprovante=filenames[0],
+            comprovantes=salvar_lista_json(filenames),
             status='pendente'
         )
+        participante.lote_cadastro = lote_cadastro
+        adicionar_comprovantes_historico(participante, filenames, 'cadastro_inicial', 'pendente', lote_cadastro)
         db.session.add(participante)
         db.session.commit()
         
@@ -352,7 +501,7 @@ def consultar():
                         mensagem='Não há números disponíveis suficientes para essa solicitação.',
                         mensagem_tipo='erro'
                     )
-                elif 'comprovante' not in request.files:
+                elif not obter_arquivos_upload('comprovante'):
                     resultado = montar_resultado_consulta(
                         participante,
                         senha=senha,
@@ -360,15 +509,8 @@ def consultar():
                         mensagem_tipo='erro'
                     )
                 else:
-                    file = request.files['comprovante']
-                    if file.filename == '':
-                        resultado = montar_resultado_consulta(
-                            participante,
-                            senha=senha,
-                            mensagem='Nenhum comprovante foi selecionado.',
-                            mensagem_tipo='erro'
-                        )
-                    elif not allowed_file(file.filename):
+                    arquivos = obter_arquivos_upload('comprovante')
+                    if any(not allowed_file(arquivo.filename) for arquivo in arquivos):
                         resultado = montar_resultado_consulta(
                             participante,
                             senha=senha,
@@ -376,10 +518,15 @@ def consultar():
                             mensagem_tipo='erro'
                         )
                     else:
+                        lote_pendente = novo_lote('extra')
+                        filenames = salvar_comprovantes(email, arquivos, prefixo='extra')
                         participante.quantidade_tickets_pendente = quantidade_extra
-                        participante.comprovante_pendente = salvar_comprovante(email, file, prefixo='extra')
+                        participante.comprovante_pendente = filenames[0]
+                        participante.comprovantes_pendente = salvar_lista_json(filenames)
                         participante.data_solicitacao_extra = datetime.utcnow()
                         participante.motivo_rejeicao_pendente = None
+                        participante.lote_pendente = lote_pendente
+                        adicionar_comprovantes_historico(participante, filenames, 'compra_adicional', 'pendente', lote_pendente)
                         db.session.commit()
                         resultado = montar_resultado_consulta(
                             participante,
@@ -429,12 +576,20 @@ def get_participantes():
 
     if status_filter == 'pendente':
         for participante in Participante.query.filter_by(status='pendente').all():
+            comprovantes = [
+                {
+                    'arquivo': arquivo,
+                    'tipo': 'cadastro_inicial',
+                    'status': 'pendente'
+                }
+                for arquivo in obter_comprovantes_campo(participante, 'comprovantes', 'comprovante')
+            ]
             participantes.append({
                 'id': participante.id,
                 'nome': participante.nome,
                 'email': participante.email,
                 'quantidade_tickets': participante.quantidade_tickets,
-                'comprovante': participante.comprovante,
+                'comprovantes': serializar_comprovantes_admin(participante, comprovantes),
                 'data_criacao': participante.data_criacao.strftime('%d/%m/%Y %H:%M'),
                 'numeros_sorte': participante.numeros_sorte,
                 'tipo_solicitacao': 'cadastro_inicial',
@@ -444,12 +599,20 @@ def get_participantes():
 
         for participante in Participante.query.filter_by(status='aprovado').all():
             if possui_solicitacao_extra_pendente(participante):
+                comprovantes = [
+                    {
+                        'arquivo': arquivo,
+                        'tipo': 'compra_adicional',
+                        'status': 'pendente'
+                    }
+                    for arquivo in obter_comprovantes_campo(participante, 'comprovantes_pendente', 'comprovante_pendente')
+                ]
                 participantes.append({
                     'id': participante.id,
                     'nome': participante.nome,
                     'email': participante.email,
                     'quantidade_tickets': participante.quantidade_tickets_pendente,
-                    'comprovante': participante.comprovante_pendente,
+                    'comprovantes': serializar_comprovantes_admin(participante, comprovantes),
                     'data_criacao': participante.data_solicitacao_extra.strftime('%d/%m/%Y %H:%M') if participante.data_solicitacao_extra else '',
                     'numeros_sorte': participante.numeros_sorte,
                     'tipo_solicitacao': 'compra_adicional',
@@ -465,7 +628,7 @@ def get_participantes():
                 'nome': participante.nome,
                 'email': participante.email,
                 'quantidade_tickets': participante.quantidade_tickets,
-                'comprovante': participante.comprovante,
+                'comprovantes': serializar_comprovantes_admin(participante, obter_historico_comprovantes(participante)),
                 'data_criacao': participante.data_criacao.strftime('%d/%m/%Y %H:%M'),
                 'numeros_sorte': participante.numeros_sorte,
                 'tipo_solicitacao': 'cadastro_inicial',
@@ -540,6 +703,7 @@ def aprovar_participante(participante_id):
     if participante.status == 'pendente':
         participante.status = 'aprovado'
         participante.numeros_sorte = formatar_numeros(numeros_novos)
+        atualizar_status_lote_historico(participante, participante.lote_cadastro, 'aprovado')
         assunto_email = 'Sua rifa foi aprovada!'
         titulo_email = 'Bem-vindo à Rifa!'
         descricao_email = 'Seu cadastro foi aprovado com sucesso!'
@@ -548,10 +712,13 @@ def aprovar_participante(participante_id):
         numeros_totais = obter_numeros_lista(participante) + numeros_novos
         participante.quantidade_tickets += quantidade_aprovada
         participante.numeros_sorte = formatar_numeros(numeros_totais)
+        atualizar_status_lote_historico(participante, participante.lote_pendente, 'aprovado')
         participante.quantidade_tickets_pendente = None
         participante.comprovante_pendente = None
+        participante.comprovantes_pendente = None
         participante.data_solicitacao_extra = None
         participante.motivo_rejeicao_pendente = None
+        participante.lote_pendente = None
         assunto_email = 'Sua compra adicional foi aprovada!'
         titulo_email = 'Compra adicional aprovada!'
         descricao_email = 'Seu novo comprovante foi aprovado e os números adicionais já foram liberados.'
@@ -611,15 +778,19 @@ def rejeitar_participante(participante_id):
     if participante.status == 'pendente':
         participante.status = 'rejeitado'
         participante.motivo_rejeicao = motivo
+        atualizar_status_lote_historico(participante, participante.lote_cadastro, 'rejeitado')
         assunto_email = 'Seu cadastro foi rejeitado'
         titulo_email = 'Rifa - Cadastro Rejeitado'
         mensagem_retorno = 'Participante rejeitado'
         texto_email = 'Seu cadastro foi rejeitado.'
     elif rejeicao_adicional:
+        atualizar_status_lote_historico(participante, participante.lote_pendente, 'rejeitado')
         participante.quantidade_tickets_pendente = None
         participante.comprovante_pendente = None
+        participante.comprovantes_pendente = None
         participante.data_solicitacao_extra = None
         participante.motivo_rejeicao_pendente = motivo
+        participante.lote_pendente = None
         assunto_email = 'Sua compra adicional foi rejeitada'
         titulo_email = 'Rifa - Compra adicional rejeitada'
         mensagem_retorno = 'Compra adicional rejeitada'
@@ -654,13 +825,31 @@ def rejeitar_participante(participante_id):
         'mensagem': f'{mensagem_retorno}, mas o email falhou: {erro_email}'
     }), 502
 
-@app.route('/api/admin/comprovante/<participante_id>')
+@app.route('/api/admin/comprovante/<int:participante_id>')
 @login_required
 def visualizar_comprovante(participante_id):
     participante = Participante.query.get_or_404(participante_id)
     tipo_solicitacao = request.args.get('tipo', 'cadastro_inicial')
     comprovante = participante.comprovante_pendente if tipo_solicitacao == 'compra_adicional' else participante.comprovante
     return redirect(f"/static/uploads/{comprovante}")
+
+@app.route('/api/admin/comprovante/<int:participante_id>/<path:filename>')
+@login_required
+def visualizar_comprovante_arquivo(participante_id, filename):
+    participante = Participante.query.get_or_404(participante_id)
+    arquivos_permitidos = {
+        item.get('arquivo')
+        for item in obter_historico_comprovantes(participante)
+        if item.get('arquivo')
+    }
+
+    arquivos_permitidos.update(obter_comprovantes_campo(participante, 'comprovantes', 'comprovante'))
+    arquivos_permitidos.update(obter_comprovantes_campo(participante, 'comprovantes_pendente', 'comprovante_pendente'))
+
+    if filename not in arquivos_permitidos:
+        return jsonify({'sucesso': False, 'mensagem': 'Comprovante não encontrado para este participante.'}), 404
+
+    return redirect(f"/static/uploads/{filename}")
 
 if __name__ == '__main__':
     app.run(debug=DEBUG_MODE, host='0.0.0.0', port=APP_PORT)

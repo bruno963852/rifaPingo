@@ -631,6 +631,17 @@ table tr:hover {
     background-color: #2980b9;
 }
 
+.comprovantes-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 180px;
+}
+
+.comprovante-link {
+    text-align: center;
+}
+
 .btn-edit {
     background-color: var(--warning-color);
     color: var(--white);

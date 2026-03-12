@@ -49,11 +49,7 @@ function carregarParticipantes() {
                     <td>${p.tipo_label || '-'}</td>
                     <td>${p.quantidade_tickets}</td>
                     <td>${p.data_criacao}</td>
-                    <td>
-                        <a href="/api/admin/comprovante/${p.id}?tipo=${p.tipo_solicitacao || 'cadastro_inicial'}" target="_blank" class="btn-view">
-                            Ver
-                        </a>
-                    </td>
+                    <td>${renderizarComprovantes(p.comprovantes || [])}</td>
                     <td>${p.numeros_sorte || '-'}</td>
                     <td>
                         <div class="table-actions">
@@ -85,6 +81,40 @@ function carregarParticipantes() {
             console.error('Erro ao carregar participantes:', error);
             document.getElementById('tableBody').innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Erro ao carregar dados</td></tr>';
         });
+}
+
+function formatarRotuloComprovante(item, index) {
+    const partes = [`Arquivo ${index + 1}`];
+
+    if (statusAtual !== 'pendente') {
+        if (item.tipo === 'cadastro_inicial') {
+            partes.push('Cadastro');
+        } else if (item.tipo === 'compra_adicional') {
+            partes.push('Adicional');
+        }
+
+        if (item.status) {
+            partes.push(item.status);
+        }
+    }
+
+    return partes.join(' • ');
+}
+
+function renderizarComprovantes(comprovantes) {
+    if (!comprovantes.length) {
+        return '-';
+    }
+
+    return `
+        <div class="comprovantes-lista">
+            ${comprovantes.map((item, index) => `
+                <a href="${item.url}" target="_blank" class="btn-view comprovante-link">
+                    ${formatarRotuloComprovante(item, index)}
+                </a>
+            `).join('')}
+        </div>
+    `;
 }
 
 function fecharModal(modalId) {
