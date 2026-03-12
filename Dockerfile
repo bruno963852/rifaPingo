@@ -14,4 +14,4 @@ RUN mkdir -p instance static/uploads
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "wsgi:app"]

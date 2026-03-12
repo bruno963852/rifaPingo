@@ -44,10 +44,11 @@ function carregarParticipantes() {
             tableBody.innerHTML = data.map(p => `
                 <tr>
                     <td>${p.email}</td>
+                    <td>${p.tipo_label || '-'}</td>
                     <td>${p.quantidade_tickets}</td>
                     <td>${p.data_criacao}</td>
                     <td>
-                        <a href="/api/admin/comprovante/${p.id}" target="_blank" class="btn-view">
+                        <a href="/api/admin/comprovante/${p.id}?tipo=${p.tipo_solicitacao || 'cadastro_inicial'}" target="_blank" class="btn-view">
                             Ver
                         </a>
                     </td>
@@ -86,6 +87,9 @@ function aprovarParticipante(id) {
             if (data.sucesso) {
                 alert(data.mensagem);
                 carregarParticipantes();
+            } else if (data.aprovado) {
+                alert(data.mensagem);
+                carregarParticipantes();
             } else {
                 alert('Erro: ' + data.mensagem);
             }
@@ -121,6 +125,10 @@ function confirmarRejeicao() {
     .then(response => response.json())
     .then(data => {
         if (data.sucesso) {
+            alert(data.mensagem);
+            document.getElementById('rejeicaoModal').classList.remove('show');
+            carregarParticipantes();
+        } else if (data.rejeitado) {
             alert(data.mensagem);
             document.getElementById('rejeicaoModal').classList.remove('show');
             carregarParticipantes();

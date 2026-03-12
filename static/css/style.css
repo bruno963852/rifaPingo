@@ -70,10 +70,13 @@ body {
 .hero {
     text-align: center;
     padding: 3rem 0;
-    background-color: var(--white);
+    background:
+        radial-gradient(circle at top left, rgba(52, 152, 219, 0.12), transparent 30%),
+        linear-gradient(145deg, #ffffff, #f3f9ff);
     margin: 2rem 0;
-    border-radius: 10px;
+    border-radius: 18px;
     box-shadow: var(--shadow);
+    border: 1px solid rgba(52, 152, 219, 0.12);
 }
 
 .hero h1 {
@@ -85,6 +88,74 @@ body {
 .hero p {
     font-size: 1.1rem;
     color: #7f8c8d;
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.hero-badge {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    background-color: #fff4d6;
+    color: #8a5a00;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.premios-showcase {
+    display: block;
+    margin-top: 2.2rem;
+    text-align: left;
+}
+
+.premios-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.premio-grid-cinco {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.premio-grid-cinco .premio-card:nth-child(-n+3) {
+    grid-column: span 2;
+}
+
+.premio-grid-cinco .premio-card:nth-child(4),
+.premio-grid-cinco .premio-card:nth-child(5) {
+    grid-column: span 3;
+}
+
+.premio-card {
+    background-color: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(44, 62, 80, 0.08);
+    border-radius: 16px;
+    padding: 0.65rem;
+    box-shadow: 0 12px 28px rgba(44, 62, 80, 0.08);
+    overflow: hidden;
+}
+
+.premio-card span {
+    display: block;
+    margin-top: 0.75rem;
+    font-weight: 700;
+    color: var(--secondary-color);
+}
+
+.premio-imagem {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    max-height: 500px;
+    object-fit: cover;
+    border-radius: 12px;
+    display: block;
+    margin: 0 auto;
+    background-color: #edf2f7;
 }
 
 /* Stats Section */
@@ -661,6 +732,19 @@ footer {
         font-size: 2rem;
     }
 
+    .premios-grid,
+    .premio-grid-cinco {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .premio-grid-cinco .premio-card:nth-child(-n+5) {
+        grid-column: auto;
+    }
+
+    .premio-imagem {
+        max-height: 150px;
+    }
+
     .stats {
         grid-template-columns: 1fr 1fr;
     }
@@ -702,5 +786,16 @@ footer {
     .btn {
         width: 100%;
         text-align: center;
+    }
+}
+
+@media (max-width: 560px) {
+    .premios-grid,
+    .premio-grid-cinco {
+        grid-template-columns: 1fr;
+    }
+
+    .premio-imagem {
+        max-height: 230px;
     }
 }

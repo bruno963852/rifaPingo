@@ -1,13 +1,19 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+from sqlalchemy import inspect, text
 import os
 from datetime import datetime
 import smtplib
+import random
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
 import re
 from functools import wraps
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'rifa-key-2024-seguro')
@@ -20,11 +26,15 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
-# Configurações de email (alterar com suas credenciais)
-EMAIL_ADDRESS = os.getenv('EMAIL_ADDRESS', 'seu_email@gmail.com')
-EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', 'sua_senha')
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
+# Configuracoes de email SMTP
+EMAIL_FROM = os.getenv('EMAIL_FROM', os.getenv('EMAIL_ADDRESS', 'seu_email@gmail.com'))
+SMTP_USERNAME = os.getenv('SMTP_USERNAME', EMAIL_FROM)
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', os.getenv('EMAIL_PASSWORD', 'sua_senha'))
+SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.resend.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', 465))
+APP_PORT = int(os.getenv('PORT', 5000))
+DEBUG_MODE = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+PINGO_IMAGE_PATH = os.path.join(app.root_path, 'static', 'images', 'pingo.jpg')
 
 # Configuração de admin
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'senha123')
@@ -56,34 +66,125 @@ class Participante(db.Model):
     data_aprovacao = db.Column(db.DateTime)
     numeros_sorte = db.Column(db.String(500))  # string com números separados por vírgula
     motivo_rejeicao = db.Column(db.String(255))
+    quantidade_tickets_pendente = db.Column(db.Integer)
+    comprovante_pendente = db.Column(db.String(255))
+    data_solicitacao_extra = db.Column(db.DateTime)
+    motivo_rejeicao_pendente = db.Column(db.String(255))
     
     def __repr__(self):
         return f'<Participante {self.email}>'
 
+def garantir_colunas_participante():
+    inspector = inspect(db.engine)
+    colunas_existentes = {coluna['name'] for coluna in inspector.get_columns('participante')}
+    colunas_necessarias = {
+        'quantidade_tickets_pendente': 'INTEGER',
+        'comprovante_pendente': 'VARCHAR(255)',
+        'data_solicitacao_extra': 'DATETIME',
+        'motivo_rejeicao_pendente': 'VARCHAR(255)'
+    }
+
+    with db.engine.begin() as conexao:
+        for nome, definicao in colunas_necessarias.items():
+            if nome not in colunas_existentes:
+                conexao.execute(text(f'ALTER TABLE participante ADD COLUMN {nome} {definicao}'))
+
 # Criar tabelas
 with app.app_context():
     db.create_all()
+    garantir_colunas_participante()
 
 # Função para enviar email
 def enviar_email(destinatario, assunto, corpo_html):
     try:
-        msg = MIMEMultipart('alternative')
+        msg = MIMEMultipart('related')
         msg['Subject'] = assunto
-        msg['From'] = EMAIL_ADDRESS
+        msg['From'] = EMAIL_FROM
         msg['To'] = destinatario
-        
+
+        alternativa = MIMEMultipart('alternative')
         parte_html = MIMEText(corpo_html, 'html')
-        msg.attach(parte_html)
-        
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_ADDRESS, destinatario, msg.as_string())
+        alternativa.attach(parte_html)
+        msg.attach(alternativa)
+
+        if os.path.exists(PINGO_IMAGE_PATH):
+            with open(PINGO_IMAGE_PATH, 'rb') as image_file:
+                imagem = MIMEImage(image_file.read())
+                imagem.add_header('Content-ID', '<pingo-photo>')
+                imagem.add_header('Content-Disposition', 'inline', filename='pingo.jpg')
+                msg.attach(imagem)
+
+        if SMTP_PORT == 465:
+            server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30)
+        else:
+            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=30)
+            server.starttls()
+
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        server.sendmail(EMAIL_FROM, destinatario, msg.as_string())
         server.quit()
-        return True
+        return True, None
     except Exception as e:
-        print(f"Erro ao enviar email: {e}")
-        return False
+        app.logger.exception('Erro ao enviar email para %s', destinatario)
+        return False, str(e)
+
+def obter_numeros_lista(participante):
+    if not participante.numeros_sorte:
+        return []
+    return sorted(int(numero.strip()) for numero in participante.numeros_sorte.split(',') if numero.strip())
+
+def formatar_numeros(numeros):
+    return ','.join(map(str, sorted(numeros)))
+
+def possui_solicitacao_extra_pendente(participante):
+    return bool(participante.quantidade_tickets_pendente and participante.comprovante_pendente)
+
+def total_numeros_confirmados():
+    return sum(
+        participante.quantidade_tickets
+        for participante in Participante.query.filter_by(status='aprovado').all()
+    )
+
+def total_numeros_pendentes():
+    cadastros_iniciais = sum(
+        participante.quantidade_tickets
+        for participante in Participante.query.filter_by(status='pendente').all()
+    )
+    compras_adicionais = sum(
+        participante.quantidade_tickets_pendente or 0
+        for participante in Participante.query.filter_by(status='aprovado').all()
+        if participante.quantidade_tickets_pendente
+    )
+    return cadastros_iniciais + compras_adicionais
+
+def numeros_disponiveis():
+    return 100 - total_numeros_confirmados() - total_numeros_pendentes()
+
+def salvar_comprovante(email, arquivo, prefixo='cadastro'):
+    filename = secure_filename(f"{prefixo}_{email}_{datetime.now().timestamp()}_{arquivo.filename}")
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    arquivo.save(filepath)
+    return filename
+
+def montar_resultado_consulta(participante, senha='', mensagem=None, mensagem_tipo='sucesso'):
+    numeros = [str(numero) for numero in obter_numeros_lista(participante)]
+    resultado = {
+        'status': participante.status,
+        'email': participante.email,
+        'senha': senha,
+        'quantidade_tickets': participante.quantidade_tickets,
+        'numeros_sorte': numeros,
+        'data_aprovacao': participante.data_aprovacao.strftime('%d/%m/%Y %H:%M') if participante.data_aprovacao else '',
+        'solicitacao_extra_pendente': possui_solicitacao_extra_pendente(participante),
+        'quantidade_tickets_pendente': participante.quantidade_tickets_pendente or 0,
+        'motivo_rejeicao_pendente': participante.motivo_rejeicao_pendente
+    }
+
+    if mensagem:
+        resultado['mensagem_extra'] = mensagem
+        resultado['mensagem_extra_tipo'] = mensagem_tipo
+
+    return resultado
 
 # Função para gerar números da sorte únicos
 def gerar_numeros_sorte(quantidade):
@@ -103,7 +204,7 @@ def gerar_numeros_sorte(quantidade):
     if len(numeros_disponiveis) < quantidade:
         return None
     
-    numeros_sorte = numeros_disponiveis[:quantidade]
+    numeros_sorte = random.sample(numeros_disponiveis, quantidade)
     return ','.join(map(str, sorted(numeros_sorte)))
 
 # Rotas
@@ -113,8 +214,8 @@ def index():
 
 @app.route('/api/stats')
 def get_stats():
-    confirmados = Participante.query.filter_by(status='aprovado').count()
-    em_espera = Participante.query.filter_by(status='pendente').count()
+    confirmados = total_numeros_confirmados()
+    em_espera = total_numeros_pendentes()
     total_bloqueado = confirmados + em_espera
     bloqueado = True if total_bloqueado >= 100 else False
     
@@ -128,11 +229,6 @@ def get_stats():
 @app.route('/cadastro', methods=['GET', 'POST'])
 def cadastro():
     if request.method == 'POST':
-        # Verificar se está bloqueado
-        stats = get_stats().get_json()
-        if stats['bloqueado']:
-            return jsonify({'sucesso': False, 'mensagem': 'Sorteio está cheio! Não é possível fazer novos cadastros.'}), 400
-        
         email = request.form.get('email', '').lower().strip()
         senha = request.form.get('senha', '').strip()
         quantidade_str = request.form.get('quantidade_tickets', '0')
@@ -150,6 +246,9 @@ def cadastro():
                 return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser entre 1 e 100'}), 400
         except ValueError:
             return jsonify({'sucesso': False, 'mensagem': 'Quantidade inválida'}), 400
+
+        if quantidade > numeros_disponiveis():
+            return jsonify({'sucesso': False, 'mensagem': 'Não há números disponíveis suficientes para essa quantidade.'}), 400
         
         # Verificar se email já existe e está ativo
         participante_existente = Participante.query.filter_by(email=email).first()
@@ -173,9 +272,7 @@ def cadastro():
             return jsonify({'sucesso': False, 'mensagem': 'Tipo de arquivo não permitido. Use: PDF, PNG, JPG, GIF, BMP'}), 400
         
         # Salvar arquivo
-        filename = secure_filename(f"{email}_{datetime.now().timestamp()}_{file.filename}")
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+        filename = salvar_comprovante(email, file)
         
         # Criar participante
         participante = Participante(
@@ -197,6 +294,7 @@ def consultar():
     resultado = None
     
     if request.method == 'POST':
+        acao = request.form.get('acao', 'consultar')
         email = request.form.get('email', '').lower().strip()
         senha = request.form.get('senha', '').strip()
         
@@ -210,6 +308,73 @@ def consultar():
             resultado = {'erro': 'Nenhum cadastro encontrado'}
         elif participante.senha != senha:
             resultado = {'erro': 'Senha incorreta'}
+        elif acao == 'adicionar_numeros':
+            if participante.status != 'aprovado':
+                resultado = {'erro': 'Somente cadastros aprovados podem solicitar novos números.'}
+            elif possui_solicitacao_extra_pendente(participante):
+                resultado = montar_resultado_consulta(
+                    participante,
+                    senha=senha,
+                    mensagem='Você já possui uma solicitação adicional aguardando aprovação.',
+                    mensagem_tipo='alerta'
+                )
+            else:
+                quantidade_extra_str = request.form.get('quantidade_tickets_extra', '0')
+                try:
+                    quantidade_extra = int(quantidade_extra_str)
+                    if quantidade_extra < 1 or quantidade_extra > 100:
+                        raise ValueError
+                except ValueError:
+                    resultado = montar_resultado_consulta(
+                        participante,
+                        senha=senha,
+                        mensagem='A quantidade adicional deve ser entre 1 e 100.',
+                        mensagem_tipo='erro'
+                    )
+                    return render_template('consultar.html', resultado=resultado)
+
+                if quantidade_extra > numeros_disponiveis():
+                    resultado = montar_resultado_consulta(
+                        participante,
+                        senha=senha,
+                        mensagem='Não há números disponíveis suficientes para essa solicitação.',
+                        mensagem_tipo='erro'
+                    )
+                elif 'comprovante' not in request.files:
+                    resultado = montar_resultado_consulta(
+                        participante,
+                        senha=senha,
+                        mensagem='Envie o novo comprovante PIX para solicitar mais números.',
+                        mensagem_tipo='erro'
+                    )
+                else:
+                    file = request.files['comprovante']
+                    if file.filename == '':
+                        resultado = montar_resultado_consulta(
+                            participante,
+                            senha=senha,
+                            mensagem='Nenhum comprovante foi selecionado.',
+                            mensagem_tipo='erro'
+                        )
+                    elif not allowed_file(file.filename):
+                        resultado = montar_resultado_consulta(
+                            participante,
+                            senha=senha,
+                            mensagem='Tipo de arquivo não permitido. Use: PDF, PNG, JPG, GIF, BMP.',
+                            mensagem_tipo='erro'
+                        )
+                    else:
+                        participante.quantidade_tickets_pendente = quantidade_extra
+                        participante.comprovante_pendente = salvar_comprovante(email, file, prefixo='extra')
+                        participante.data_solicitacao_extra = datetime.utcnow()
+                        participante.motivo_rejeicao_pendente = None
+                        db.session.commit()
+                        resultado = montar_resultado_consulta(
+                            participante,
+                            senha=senha,
+                            mensagem='Solicitação enviada com sucesso. Aguarde a aprovação dos novos números.',
+                            mensagem_tipo='sucesso'
+                        )
         elif participante.status == 'pendente':
             resultado = {'status': 'pendente', 'mensagem': 'Seu cadastro está aguardando aprovação'}
         elif participante.status == 'rejeitado':
@@ -219,14 +384,7 @@ def consultar():
                 'email': participante.email
             }
         elif participante.status == 'aprovado':
-            numeros = participante.numeros_sorte.split(',') if participante.numeros_sorte else []
-            resultado = {
-                'status': 'aprovado',
-                'email': participante.email,
-                'quantidade_tickets': participante.quantidade_tickets,
-                'numeros_sorte': numeros,
-                'data_aprovacao': participante.data_aprovacao.strftime('%d/%m/%Y %H:%M') if participante.data_aprovacao else ''
-            }
+            resultado = montar_resultado_consulta(participante, senha=senha)
     
     return render_template('consultar.html', resultado=resultado)
 
@@ -255,53 +413,131 @@ def admin():
 @login_required
 def get_participantes():
     status_filter = request.args.get('status', 'pendente')
-    participantes = Participante.query.filter_by(status=status_filter).all()
+    participantes = []
+
+    if status_filter == 'pendente':
+        for participante in Participante.query.filter_by(status='pendente').all():
+            participantes.append({
+                'id': participante.id,
+                'email': participante.email,
+                'quantidade_tickets': participante.quantidade_tickets,
+                'comprovante': participante.comprovante,
+                'data_criacao': participante.data_criacao.strftime('%d/%m/%Y %H:%M'),
+                'numeros_sorte': participante.numeros_sorte,
+                'tipo_solicitacao': 'cadastro_inicial',
+                'tipo_label': 'Cadastro inicial'
+            })
+
+        for participante in Participante.query.filter_by(status='aprovado').all():
+            if possui_solicitacao_extra_pendente(participante):
+                participantes.append({
+                    'id': participante.id,
+                    'email': participante.email,
+                    'quantidade_tickets': participante.quantidade_tickets_pendente,
+                    'comprovante': participante.comprovante_pendente,
+                    'data_criacao': participante.data_solicitacao_extra.strftime('%d/%m/%Y %H:%M') if participante.data_solicitacao_extra else '',
+                    'numeros_sorte': participante.numeros_sorte,
+                    'tipo_solicitacao': 'compra_adicional',
+                    'tipo_label': 'Compra adicional'
+                })
+
+        participantes.sort(key=lambda item: item['data_criacao'], reverse=True)
+    else:
+        for participante in Participante.query.filter_by(status=status_filter).all():
+            participantes.append({
+                'id': participante.id,
+                'email': participante.email,
+                'quantidade_tickets': participante.quantidade_tickets,
+                'comprovante': participante.comprovante,
+                'data_criacao': participante.data_criacao.strftime('%d/%m/%Y %H:%M'),
+                'numeros_sorte': participante.numeros_sorte,
+                'tipo_solicitacao': 'cadastro_inicial',
+                'tipo_label': 'Cadastro inicial'
+            })
     
-    return jsonify([{
-        'id': p.id,
-        'email': p.email,
-        'quantidade_tickets': p.quantidade_tickets,
-        'comprovante': p.comprovante,
-        'data_criacao': p.data_criacao.strftime('%d/%m/%Y %H:%M'),
-        'numeros_sorte': p.numeros_sorte
-    } for p in participantes])
+    return jsonify(participantes)
 
 @app.route('/api/admin/aprovar/<int:participante_id>', methods=['POST'])
 @login_required
 def aprovar_participante(participante_id):
     participante = Participante.query.get_or_404(participante_id)
-    
-    if participante.status != 'pendente':
+
+    aprovacao_adicional = possui_solicitacao_extra_pendente(participante) and participante.status == 'aprovado'
+
+    if participante.status == 'pendente':
+        quantidade_aprovada = participante.quantidade_tickets
+    elif aprovacao_adicional:
+        quantidade_aprovada = participante.quantidade_tickets_pendente
+    else:
         return jsonify({'sucesso': False, 'mensagem': 'Participante não está pendente'}), 400
-    
-    # Gerar números da sorte
-    numeros_sorte = gerar_numeros_sorte(participante.quantidade_tickets)
-    
+
+    numeros_sorte = gerar_numeros_sorte(quantidade_aprovada)
+
     if not numeros_sorte:
         return jsonify({'sucesso': False, 'mensagem': 'Não há números disponíveis'}), 400
-    
-    participante.status = 'aprovado'
-    participante.numeros_sorte = numeros_sorte
+
+    numeros_novos = [int(numero) for numero in numeros_sorte.split(',') if numero]
+
+    if participante.status == 'pendente':
+        participante.status = 'aprovado'
+        participante.numeros_sorte = formatar_numeros(numeros_novos)
+        assunto_email = 'Sua rifa foi aprovada!'
+        titulo_email = 'Bem-vindo à Rifa!'
+        descricao_email = 'Seu cadastro foi aprovado com sucesso!'
+        mensagem_retorno = 'Participante aprovado com sucesso'
+    else:
+        numeros_totais = obter_numeros_lista(participante) + numeros_novos
+        participante.quantidade_tickets += quantidade_aprovada
+        participante.numeros_sorte = formatar_numeros(numeros_totais)
+        participante.quantidade_tickets_pendente = None
+        participante.comprovante_pendente = None
+        participante.data_solicitacao_extra = None
+        participante.motivo_rejeicao_pendente = None
+        assunto_email = 'Sua compra adicional foi aprovada!'
+        titulo_email = 'Compra adicional aprovada!'
+        descricao_email = 'Seu novo comprovante foi aprovado e os números adicionais já foram liberados.'
+        mensagem_retorno = 'Compra adicional aprovada com sucesso'
+
     participante.data_aprovacao = datetime.utcnow()
     db.session.commit()
     
-    # Enviar email com números da sorte
-    numeros_lista = ', '.join(numeros_sorte.split(','))
+    numeros_lista = ', '.join(map(str, numeros_novos))
+    numeros_totais_lista = ', '.join(map(str, obter_numeros_lista(participante)))
     corpo_email = f"""
     <html>
-        <body style="font-family: Arial, sans-serif;">
-            <h2>Bem-vindo à Rifa!</h2>
-            <p>Seu cadastro foi aprovado com sucesso!</p>
-            <p><strong>Seus números da sorte:</strong></p>
-            <h3 style="color: #2ecc71;">{numeros_lista}</h3>
-            <p>Boa sorte!</p>
+        <body style="font-family: Arial, sans-serif; background-color: #f6f8fb; padding: 24px; color: #243447;">
+            <div style="max-width: 640px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 30px rgba(36, 52, 71, 0.12);">
+                <div style="padding: 32px; text-align: center; background: linear-gradient(135deg, #1f6feb, #2ea043); color: #ffffff;">
+                    <img src="cid:pingo-photo" alt="Pingo" style="width: 180px; height: 180px; object-fit: cover; border-radius: 50%; border: 4px solid rgba(255,255,255,0.9); margin-bottom: 16px;">
+                    <h2 style="margin: 0;">{titulo_email}</h2>
+                </div>
+                <div style="padding: 32px;">
+                    <p>{descricao_email}</p>
+                    <p style="font-size: 18px; font-weight: bold; color: #2ea043;">Muito Obrigado! O pingo agradece a sua contribuição!</p>
+                    <p><strong>Novos números da sorte:</strong></p>
+                    <h3 style="color: #1f6feb;">{numeros_lista}</h3>
+                    <p><strong>Todos os seus números da sorte:</strong></p>
+                    <p style="font-size: 16px; line-height: 1.8;">{numeros_totais_lista}</p>
+                    <p>Boa sorte!</p>
+                </div>
+            </div>
         </body>
     </html>
     """
     
-    enviar_email(participante.email, 'Sua rifa foi aprovada!', corpo_email)
-    
-    return jsonify({'sucesso': True, 'mensagem': 'Participante aprovado com sucesso!'})
+    email_enviado, erro_email = enviar_email(participante.email, assunto_email, corpo_email)
+
+    if email_enviado:
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'{mensagem_retorno} e email enviado.'
+        })
+
+    return jsonify({
+        'sucesso': False,
+        'aprovado': True,
+        'mensagem': f'{mensagem_retorno}, mas o email falhou: {erro_email}'
+    }), 502
 
 @app.route('/api/admin/rejeitar/<int:participante_id>', methods=['POST'])
 @login_required
@@ -311,34 +547,61 @@ def rejeitar_participante(participante_id):
     
     participante = Participante.query.get_or_404(participante_id)
     
-    if participante.status != 'pendente':
+    rejeicao_adicional = possui_solicitacao_extra_pendente(participante) and participante.status == 'aprovado'
+
+    if participante.status == 'pendente':
+        participante.status = 'rejeitado'
+        participante.motivo_rejeicao = motivo
+        assunto_email = 'Seu cadastro foi rejeitado'
+        titulo_email = 'Rifa - Cadastro Rejeitado'
+        mensagem_retorno = 'Participante rejeitado'
+        texto_email = 'Seu cadastro foi rejeitado.'
+    elif rejeicao_adicional:
+        participante.quantidade_tickets_pendente = None
+        participante.comprovante_pendente = None
+        participante.data_solicitacao_extra = None
+        participante.motivo_rejeicao_pendente = motivo
+        assunto_email = 'Sua compra adicional foi rejeitada'
+        titulo_email = 'Rifa - Compra adicional rejeitada'
+        mensagem_retorno = 'Compra adicional rejeitada'
+        texto_email = 'Sua solicitação de números adicionais foi rejeitada.'
+    else:
         return jsonify({'sucesso': False, 'mensagem': 'Participante não está pendente'}), 400
-    
-    participante.status = 'rejeitado'
-    participante.motivo_rejeicao = motivo
+
     db.session.commit()
     
-    # Enviar email de rejeição
     corpo_email = f"""
     <html>
         <body style="font-family: Arial, sans-serif;">
-            <h2>Rifa - Cadastro Rejeitado</h2>
-            <p>Seu cadastro foi rejeitado.</p>
+            <h2>{titulo_email}</h2>
+            <p>{texto_email}</p>
             <p><strong>Motivo:</strong> {motivo}</p>
             <p>Se tiver dúvidas, entre em contato conosco.</p>
         </body>
     </html>
     """
     
-    enviar_email(participante.email, 'Seu cadastro foi rejeitado', corpo_email)
-    
-    return jsonify({'sucesso': True, 'mensagem': 'Participante rejeitado e removido do sistema.'})
+    email_enviado, erro_email = enviar_email(participante.email, assunto_email, corpo_email)
+
+    if email_enviado:
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'{mensagem_retorno} e email enviado.'
+        })
+
+    return jsonify({
+        'sucesso': False,
+        'rejeitado': True,
+        'mensagem': f'{mensagem_retorno}, mas o email falhou: {erro_email}'
+    }), 502
 
 @app.route('/api/admin/comprovante/<participante_id>')
 @login_required
 def visualizar_comprovante(participante_id):
     participante = Participante.query.get_or_404(participante_id)
-    return redirect(f"/static/uploads/{participante.comprovante}")
+    tipo_solicitacao = request.args.get('tipo', 'cadastro_inicial')
+    comprovante = participante.comprovante_pendente if tipo_solicitacao == 'compra_adicional' else participante.comprovante
+    return redirect(f"/static/uploads/{comprovante}")
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=DEBUG_MODE, host='0.0.0.0', port=APP_PORT)

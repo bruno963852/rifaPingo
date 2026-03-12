@@ -20,8 +20,34 @@
 
     <div class="container">
         <section class="hero">
+            <div class="hero-badge">5 premios para 1 ganhador</div>
             <h1>Bem-vindo à Rifa em Prol da Cirurgia do Pingo!</h1>
-            <p>Participe do nosso sorteio! Preencha o formulário, faça o pagamento e acompanhe seus números da sorte.</p>
+            <p>Participe do nosso sorteio, concorra a um combo com <strong>5 premios</strong> e acompanhe seus números da sorte em tempo real.</p>
+
+            <div class="premios-showcase">
+                <div class="premios-grid premio-grid-cinco">
+                    <div class="premio-card">
+                        <img src="{{ url_for('static', filename='images/premio4.jpeg') }}" alt="Fone Bluetooth" class="premio-imagem">
+                        <span>Fone Bluetooth</span>
+                    </div>
+                    <div class="premio-card">
+                        <img src="{{ url_for('static', filename='images/premio2.jpeg') }}" alt="Escova Alisadora" class="premio-imagem">
+                        <span>Escova Alisadora</span>
+                    </div>
+                    <div class="premio-card">
+                        <img src="{{ url_for('static', filename='images/premio3.jpeg') }}" alt="Moedor de Café" class="premio-imagem">
+                        <span>Moedor de Café</span>
+                    </div>
+                    <div class="premio-card">
+                        <img src="{{ url_for('static', filename='images/premio1.jpeg') }}" alt="Headphone Bluetooth" class="premio-imagem">
+                        <span>Headphone Bluetooth</span>
+                    </div>
+                    <div class="premio-card">
+                        <img src="{{ url_for('static', filename='images/premio5.jpeg') }}" alt="Bolsa Courofino" class="premio-imagem">
+                        <span>Bolsa Courofino</span>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <div class="preco-banner">
@@ -90,10 +116,10 @@
 
                 <div class="info-box">
                     <div style="text-align: center; margin-bottom: 1.5rem;">
-                        <img src="{{ url_for('static', filename='images/pingo.jpeg') }}" alt="Pingo - Nosso gato" class="pingo-foto">
+                        <img src="{{ url_for('static', filename='images/pingo.jpg') }}" alt="Pingo - Nosso gato" class="pingo-foto">
                     </div>
                     <h2>🐱 Motivação da Rifa</h2>
-                    <p>Esta rifa é em prol da cirurgia do <strong>Pingo</strong>, nosso gato de 5 anos.</p>
+                    <p>Esta rifa é em prol da cirurgia do <strong>Pingo</strong>, nosso gato de 6 anos.</p>
                     <p>Há alguns meses, o Pingo vinha sentindo um desconforto no ouvido direito. Após investigação e consulta com um especialista, foi detectada <strong>uma massa dentro do ouvido</strong>, que secreta pus e gera bastante desconforto ao animal.</p>
                     <p>Desde que nasceu, o Pingo carrega uma sequela respiratória que nunca havia sido explicada. Contudo, o especialista suspeita que <strong>essa massa no ouvido possa explicar esses problemas respiratórios</strong>, que jamais foram detectados antes, pois apenas o especialista possui o equipamento adequado para examinar bem o interior do ouvido do animal.</p>
                     

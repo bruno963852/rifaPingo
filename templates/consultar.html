@@ -55,6 +55,11 @@
                 {% elif resultado.get('status') == 'aprovado' %}
                     <div class="resultado sucesso-box">
                         <h2>✅ Cadastro Aprovado!</h2>
+                        {% if resultado.get('mensagem_extra') %}
+                            <div class="{% if resultado.get('mensagem_extra_tipo') == 'erro' %}erro-box{% elif resultado.get('mensagem_extra_tipo') == 'alerta' %}alerta-box{% else %}sucesso-box{% endif %}" style="margin-top: 1rem;">
+                                <p>{% if resultado.get('mensagem_extra_tipo') == 'erro' %}❌{% elif resultado.get('mensagem_extra_tipo') == 'alerta' %}⏳{% else %}✅{% endif %} {{ resultado['mensagem_extra'] }}</p>
+                            </div>
+                        {% endif %}
                         <p><strong>Email:</strong> {{ resultado['email'] }}</p>
                         <p><strong>Quantidade de Tickets:</strong> {{ resultado['quantidade_tickets'] }}</p>
                         <p><strong>Data de Aprovação:</strong> {{ resultado['data_aprovacao'] }}</p>
@@ -66,6 +71,35 @@
                                 {% endfor %}
                             </div>
                         </div>
+
+                        {% if resultado.get('solicitacao_extra_pendente') %}
+                            <div class="alerta-box" style="margin-top: 2rem;">
+                                <p class="alerta-text">⏳ Você já solicitou <strong>{{ resultado['quantidade_tickets_pendente'] }}</strong> número(s) adicional(is) e essa compra está aguardando aprovação.</p>
+                            </div>
+                        {% else %}
+                            <div class="form-section" style="margin-top: 2rem; padding: 1.5rem; background-color: #f8fbff;">
+                                <h3 style="margin-bottom: 1rem;">Adicionar mais números da sorte</h3>
+                                <p style="margin-bottom: 1rem;">Envie um novo comprovante PIX e informe a quantidade desejada para análise.</p>
+                                <form method="POST" enctype="multipart/form-data">
+                                    <input type="hidden" name="acao" value="adicionar_numeros">
+                                    <input type="hidden" name="email" value="{{ resultado['email'] }}">
+                                    <input type="hidden" name="senha" value="{{ resultado['senha'] }}">
+
+                                    <div class="form-group">
+                                        <label for="quantidade_tickets_extra">Quantidade adicional:</label>
+                                        <input type="number" id="quantidade_tickets_extra" name="quantidade_tickets_extra" min="1" max="100" required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="comprovante_extra">Novo comprovante PIX:</label>
+                                        <input type="file" id="comprovante_extra" name="comprovante" accept="image/*,.pdf" required>
+                                        <small>Formatos aceitos: PDF, PNG, JPG, GIF, BMP (máx 16MB)</small>
+                                    </div>
+
+                                    <button type="submit" class="btn btn-primary">Enviar nova solicitação</button>
+                                </form>
+                            </div>
+                        {% endif %}
                     </div>
                 {% endif %}
             {% endif %}
