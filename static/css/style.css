@@ -66,6 +66,12 @@ body {
     color: var(--primary-color);
 }
 
+.nav-link-disabled {
+    color: rgba(255, 255, 255, 0.55);
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+
 /* Hero Section */
 .hero {
     text-align: center;

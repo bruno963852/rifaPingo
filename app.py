@@ -41,6 +41,7 @@ PINGO_IMAGE_PATH = os.path.join(app.root_path, 'static', 'images', 'pingo.jpg')
 # Configuração de admin
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'senha123')
 TOTAL_NUMEROS_RIFA = 200
+CADASTRO_ENCERRADO = True
 
 # Extensões de arquivo permitidas
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp'}
@@ -384,6 +385,11 @@ def get_stats():
 
 @app.route('/cadastro', methods=['GET', 'POST'])
 def cadastro():
+    if CADASTRO_ENCERRADO:
+        if request.method == 'POST':
+            return jsonify({'sucesso': False, 'mensagem': 'Cadastro encerrado. A rifa ja foi concluida.'}), 403
+        return redirect(url_for('index'))
+
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
         email = request.form.get('email', '').lower().strip()

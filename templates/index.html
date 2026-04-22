@@ -12,7 +12,7 @@
             <h1 class="logo">🎰 Rifa em Prol da Cirurgia do Pingo</h1>
             <ul class="nav-links">
                 <li><a href="/">Início</a></li>
-                <li><a href="/cadastro">Cadastro</a></li>
+                <li><span class="nav-link-disabled" aria-disabled="true" title="Cadastro encerrado">Cadastro encerrado</span></li>
                 <li><a href="/consultar">Consultar números</a></li>
             </ul>
         </div>
@@ -21,8 +21,8 @@
     <div class="container">
         <section class="hero">
             <div class="hero-badge">5 premios para 1 ganhador</div>
-            <h1>Bem-vindo à Rifa em Prol da Cirurgia do Pingo!</h1>
-            <p>Participe do nosso sorteio, concorra a um combo com <strong>5 premios</strong> e acompanhe seus números da sorte em tempo real.</p>
+            <h1>Rifa em Prol da Cirurgia do Pingo Concluída</h1>
+            <p>A rifa foi encerrada com sucesso. O ganhador foi <strong>Tiago Ranieri</strong>, com o número <strong>50</strong>.</p>
 
             <div class="premios-showcase">
                 <div class="premios-grid premio-grid-cinco">
@@ -56,7 +56,7 @@
         </div>
 
         <div class="cta-buttons">
-            <a href="/cadastro" class="btn btn-primary">Participar Agora</a>
+            <a href="/consultar" class="btn btn-primary">Consultar Números</a>
             <a href="/consultar" class="btn btn-secondary">Consultar Números</a>
         </div>
 
@@ -74,8 +74,8 @@
                 <div class="stat-label">Total de Cadastros</div>
             </div>
             <div class="stat-card" id="status-bloqueio">
-                <div class="stat-message" id="bloqueio-msg">✅ Sorteio Aberto</div>
-                <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">Data do sorteio: <strong>31 de Março de 2026</strong> ou quando atingirmos <strong>200</strong> participantes</p>
+                <div class="stat-message" id="bloqueio-msg">🏁 Rifa Concluída</div>
+                <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">Ganhador: <strong>Tiago Ranieri</strong> com o número <strong>50</strong></p>
             </div>
         </section>
 
@@ -153,7 +153,7 @@
             </div>
 
             <div class="cta-buttons">
-                <a href="/cadastro" class="btn btn-primary">Participar Agora</a>
+                <a href="/consultar" class="btn btn-primary">Consultar Números</a>
                 <a href="/consultar" class="btn btn-secondary">Consultar Números</a>
             </div>
         </section>
@@ -181,13 +181,8 @@
                     document.getElementById('em-espera').textContent = data.em_espera;
                     document.getElementById('total').textContent = data.total;
                     const bloqueioMsg = document.getElementById('bloqueio-msg');
-                    if (data.bloqueado) {
-                        bloqueioMsg.textContent = '❌ Sorteio Cheio';
-                        bloqueioMsg.style.color = '#e74c3c';
-                    } else {
-                        bloqueioMsg.textContent = '✅ Sorteio Aberto';
-                        bloqueioMsg.style.color = '#2ecc71';
-                    }
+                    bloqueioMsg.textContent = '🏁 Rifa Concluída';
+                    bloqueioMsg.style.color = '#2c3e50';
                 });
         }
 
